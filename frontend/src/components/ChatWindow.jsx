@@ -66,8 +66,8 @@ export default function ChatWindow({ messages, onSend, busy, docLabel, suggestio
                 send();
               }
             }}
-            placeholder="Ask a question about your document…"
-            className="max-h-32 flex-1 resize-none border border-neutral-800 bg-[#0a0a0a] px-3.5 py-2.5 text-sm text-neutral-100 placeholder-neutral-600 outline-none transition focus:border-neutral-400"
+            placeholder="Ask your document…"
+            className="max-h-32 flex-1 resize-none border border-neutral-800 bg-[#0a0a0a] px-3.5 py-2.5 text-base text-neutral-100 placeholder-neutral-600 outline-none transition focus:border-neutral-400 sm:text-sm"
           />
           <button
             type="button"

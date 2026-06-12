@@ -131,7 +131,7 @@ export default function App() {
   };
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden bg-[#050505] text-neutral-100">
+    <div className="relative flex h-dvh flex-col overflow-hidden bg-[#050505] text-neutral-100">
       {/* 3D layer: full-bleed behind everything; bright on the landing
           screen, dimmed during chat so text stays readable. */}
       <div
@@ -164,7 +164,9 @@ export default function App() {
         </div>
       )}
 
-      <header className="relative z-10 flex items-center gap-3 border-b border-neutral-900 bg-[#050505]/80 px-5 py-3 backdrop-blur-sm">
+      {/* flex-wrap: on phones the session controls drop to their own row
+          instead of crushing the title and truncating filenames. */}
+      <header className="relative z-10 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-neutral-900 bg-[#050505]/80 px-4 py-3 backdrop-blur-sm sm:px-5">
         <span className="inline-block h-2.5 w-2.5 bg-white" aria-hidden="true" />
         <div className="min-w-0">
           <h1 className="text-sm font-medium tracking-wide text-neutral-100">AskMyDocs</h1>
@@ -172,18 +174,18 @@ export default function App() {
         </div>
 
         {session && (
-          <div className="ml-auto flex min-w-0 items-center gap-2 text-xs">
-            <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+          <div className="flex w-full min-w-0 items-center gap-2 text-xs sm:ml-auto sm:w-auto">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 sm:flex-initial sm:justify-end">
               {session.files.map((f, i) => (
                 <span
                   key={i}
-                  className="max-w-44 truncate border border-neutral-800 px-2.5 py-1 font-mono text-[11px] text-neutral-400"
+                  className="max-w-36 truncate border border-neutral-800 px-2.5 py-1 font-mono text-[11px] text-neutral-400 sm:max-w-44"
                   title={f}
                 >
                   {f}
                 </span>
               ))}
-              <span className="font-mono text-[11px] text-neutral-600">{session.totalChunks} chunks</span>
+              <span className="whitespace-nowrap font-mono text-[11px] text-neutral-600">{session.totalChunks} chunks</span>
             </div>
 
             <input
@@ -201,14 +203,14 @@ export default function App() {
               type="button"
               disabled={uploading}
               onClick={() => addInputRef.current?.click()}
-              className="shrink-0 border border-neutral-700 px-2.5 py-1 text-[11px] font-medium text-neutral-300 transition hover:border-neutral-400 hover:text-white disabled:opacity-50"
+              className="shrink-0 whitespace-nowrap border border-neutral-700 px-2.5 py-1 text-[11px] font-medium text-neutral-300 transition hover:border-neutral-400 hover:text-white disabled:opacity-50"
             >
               {uploading ? 'adding…' : '+ add pdf'}
             </button>
             <button
               type="button"
               onClick={resetSession}
-              className="shrink-0 text-[11px] text-neutral-500 transition hover:text-white"
+              className="shrink-0 whitespace-nowrap text-[11px] text-neutral-500 transition hover:text-white"
             >
               new chat
             </button>
