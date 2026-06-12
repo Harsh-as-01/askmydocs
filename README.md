@@ -1,27 +1,40 @@
-# AskMyDocs — Chat with your PDFs, with receipts
+# AskMyDocs
 
-**Live demo:** _[link placeholder — deployed on Render]_
-**Stack:** Node.js + Express · React (Vite) + Tailwind · Groq (Llama 3.3 70B) · Cohere embeddings · HNSW vector search
+Upload a PDF, ask it questions, get answers with citations that point at the exact passage. If the answer isn't in the document, it tells you that instead of making something up.
 
----
+**Live demo:** _coming soon (Render)_
+**Stack:** Node + Express · React (Vite) + Tailwind · Groq (Llama 3.3 70B) · Cohere embeddings · HNSW · three.js
 
-## The business problem
+## Why I built this
 
-Teams sit on piles of PDFs — product manuals, contracts, policies, research reports — and finding one specific fact means scrolling, Ctrl+F guessing, or asking a colleague. Generic chatbots are worse than useless here: ask ChatGPT about *your* warranty terms and it will confidently invent an answer.
+This is my first RAG project. I wanted to actually understand retrieval-augmented generation, so I built every stage myself instead of importing LangChain and hoping for the best.
 
-The hard requirement for document Q&A in any serious setting isn't intelligence — it's **trust**. An answer is only useful if you can check where it came from, and a system that admits *"that's not in the document"* beats one that guesses.
+The problem with using a normal chatbot on your own documents is that it guesses. Ask it about *your* warranty terms and it will confidently invent some. Everything in this project exists to fix that: answers come only from the document, every claim carries a citation you can check, and off-topic questions get a refusal. I tested the refusal part the hardest because a wrong answer that sounds right is worse than no answer.
 
-## The solution
+## What it does
 
-AskMyDocs is a Retrieval-Augmented Generation (RAG) app: upload one or more PDFs and ask questions in plain English. Every answer is
+- Chat with one or more PDFs, answers streamed token by token over SSE
+- Every answer cites sources like [1], [2] — expand them to see the passage, the file it came from, and its similarity score
+- Off-topic questions get "I couldn't find that in the document." (verified, not assumed)
+- Follow-ups work: "what voids it?" is rewritten into a standalone question before retrieval
+- Each upload generates 3 clickable starter questions
+- Sessions survive server restarts because the vector index is saved to disk
+- A 3D globe that renders the real vector index — every chunk is a point in space, and retrieved chunks flash red when you ask something
+- Per-IP rate limits, because the public demo runs on my API keys
 
-- **grounded** — generated strictly from passages retrieved out of *your* documents,
-- **cited** — statements carry [1]-style references you can expand to see the exact source passage, its file, and its similarity score,
-- **honest** — if the documents don't contain the answer, it says exactly that instead of hallucinating.
+## New to RAG? The five words you need
 
-Sessions support multiple documents with per-file citation attribution, stream answers token-by-token, and survive server restarts via disk-persisted vector indexes. Follow-up questions work naturally ("what voids it?") thanks to LLM query rewriting, each upload generates clickable starter questions, and the public endpoints are rate-limited per IP so one visitor can't drain the API quotas behind the demo.
+I didn't know most of these when I started, so here they are the way I'd explain them to a friend:
 
-## How it works — the RAG pipeline
+- **Embedding** — a list of numbers (here, 1024 of them) that represents the *meaning* of a piece of text. Texts that mean similar things get similar numbers. "What's the refund policy?" and "items may be returned within 30 days" share almost no words, but their embeddings sit close together.
+- **Vector** — just the math name for that list of numbers. Embedding = vector, used interchangeably.
+- **Cosine similarity** — how you measure "close together" for two vectors. Score near 1 means same meaning, near 0 means unrelated. This is the entire search mechanism: no keywords, just meaning.
+- **Chunking** — cutting the document into ~500-token pieces before embedding. One vector can't faithfully represent a 50-page PDF, but it can represent two paragraphs.
+- **Hallucination** — when a language model fills a gap with confident fiction. The fix here is called *grounding*: the model only sees the retrieved chunks and is told to refuse if the answer isn't in them.
+
+Two smaller ones you'll see below: **temperature** controls how creative the model is allowed to be (0.1 ≈ stick to the facts), and **SSE** (Server-Sent Events) is the plain-HTTP way the server streams the answer word by word to the browser.
+
+## How the pipeline works
 
 ```
                          INGESTION (per upload)
@@ -40,76 +53,91 @@ Sessions support multiple documents with per-file citation attribution, stream a
 └──────────┘   └────────────────┘   └──────────────────────────────┘
 ```
 
-The retrieved chunks are streamed to the browser *before* the answer (so citations render instantly), then the answer streams token-by-token over Server-Sent Events.
+In plain words: the PDF becomes text, the text becomes ~500-token chunks split on sentence boundaries, each chunk becomes a 1024-dimension vector. When you ask something, your question becomes a vector too, and cosine similarity finds the 4 closest chunks. Those chunks go into the prompt as numbered context, and the model is only allowed to answer from them.
 
-## Key engineering decisions
+The retrieved chunks are sent to the browser before the answer starts streaming, so citations render instantly.
 
-**Cohere API embeddings instead of a local model.** A local embedding model (e.g. sentence-transformers) means a ~500MB+ model in RAM — a guaranteed out-of-memory crash on the 512MB instances that free/cheap hosting provides. Calling Cohere's `embed-english-v3.0` keeps the server footprint tiny and deployment boring. Crucially, Cohere v3 embeds documents and queries asymmetrically (`input_type: "search_document"` vs `"search_query"`), which measurably improves retrieval over symmetric embedding.
+## The globe is real data, not decoration
 
-**Citations as a first-class feature, not an afterthought.** The model receives chunks as a numbered list and must cite `[n]`; the UI maps those numbers back to the exact passages with their similarity scores and source filenames. The user can audit every claim. For document Q&A, this is the difference between a demo and a tool someone will actually rely on.
+My favorite part. Each chunk's 1024-d embedding is projected onto 3 fixed random axes and normalized onto a sphere ([lib/projection.js](lib/projection.js)). Random projection roughly preserves angles, so chunks about the same topic land near each other.
 
-**Temperature 0.1.** Generation should repeat what the document says, not get creative. Near-zero temperature minimizes drift and keeps answers reproducible — the right trade for factual Q&A, the wrong one for creative writing.
+On upload the points fly into position. When you ask a question, the top-4 retrieved chunks pulse red for a few seconds. You're watching the cosine similarity search happen.
 
-**Chunk size 500 tokens with 50-token overlap.** The central RAG trade-off: bigger chunks carry more context but blur retrieval precision (one vector has to represent too many topics); smaller chunks retrieve sharply but strand facts without context. ~500 tokens with sentence-boundary splitting is a strong default, and the 50-token overlap ensures a fact straddling a chunk boundary survives intact in at least one chunk. Both knobs live in `config.js`.
+three.js loads lazily in its own bundle (~220KB gzipped) so the chat UI stays fast. No WebGL, or `prefers-reduced-motion` set? You get a static fallback instead of a crash.
 
-**HNSW in-process instead of a vector database.** For sessions of one-to-a-few PDFs, a dedicated vector DB is infrastructure for its own sake. `hnswlib-node` provides the same approximate-nearest-neighbor algorithm the big DBs use, in-process, with zero external services — and the index serializes to disk so sessions survive restarts.
+## Decisions I made and why
 
-**Honest refusal, enforced by prompt.** The system prompt pins an exact refusal sentence ("I couldn't find that in the document.") and forbids outside knowledge. Tested explicitly: off-topic questions get the refusal, not plausible fiction.
+**Cohere API instead of a local embedding model.** A local model wants 500MB+ of RAM and free hosting gives you 512MB total. API embeddings keep the server small enough to deploy anywhere. Cohere v3 also embeds documents and queries asymmetrically (`input_type: search_document` vs `search_query`), which retrieves better than treating both the same.
 
-**Query rewriting for follow-ups.** Retrieval embeds each question in isolation, so "what voids it?" would retrieve nothing useful — "it" carries no meaning without the previous turn. Before retrieving, a small LLM call rewrites follow-ups into standalone questions using recent chat history. One cheap completion fixes the most common way conversational RAG breaks.
+**Temperature 0.1.** I want the model to repeat what the document says, not get creative with it.
 
-**Rate limiting as a launch requirement, not an afterthought.** The demo runs on the owner's API keys, so `/api/upload` and `/api/chat` are limited per IP (plus a per-session document cap). A public LLM app without rate limits is an open invitation to drain your quota.
+**Chunks of 500 tokens with 50 overlap.** Bigger chunks mean one vector has to represent too many topics, so retrieval gets blurry. Smaller chunks retrieve sharply but lose surrounding context. The overlap is there so a fact sitting on a chunk boundary survives whole in at least one chunk.
+
+**HNSW in-process instead of a vector database.** HNSW is a graph structure that finds the nearest vectors without comparing your query against every stored one — it's what's inside most dedicated vector databases. For a handful of PDFs, running a separate DB is infrastructure for its own sake, so I use `hnswlib-node` in the same process, and the index serializes to disk so sessions outlive restarts.
+
+**Query rewriting for follow-ups.** Retrieval embeds each question alone, so "what voids it?" matches nothing. One small LLM call rewrites follow-ups into standalone questions using recent chat history. Cheapest fix for the most common way conversational RAG breaks.
+
+**Rate limits before going public, not after.** Anyone hitting the demo is spending my Groq and Cohere quota. 10 uploads/hour and 30 questions/15min per IP, plus max 5 documents per session.
+
+## Things that broke while building this
+
+- `pdf-parse` crashes under ES modules because its entry file runs debug code on import. Importing `pdf-parse/lib/pdf-parse.js` directly skips it.
+- My first generated test PDF failed with "bad XRef entry". pdf-parse uses an old PDF.js build that chokes on newer PDF output. Regenerating the file with a different library fixed it.
+- `hnswlib-node` is a native C++ module. On Windows that means installing the Visual Studio build tools first; in Docker and on Render it just compiles.
+- I installed three.js while the Vite dev server was running and got "Invalid hook call" everywhere — a stale prebundle cache had two copies of React. Deleting `node_modules/.vite` fixed it.
+- Llama writes clipped questions like "What is warranty length?" unless the prompt shows it one example of a fluent question. Prompt iteration is real work.
 
 ## Run it locally
 
-Prereqs: Node 18+, a [Groq API key](https://console.groq.com/keys) (free), a [Cohere API key](https://dashboard.cohere.com/api-keys) (free).
+You need Node 18+, a free [Groq key](https://console.groq.com/keys) and a free [Cohere key](https://dashboard.cohere.com/api-keys).
 
 ```bash
-# 1. Backend
-cp .env.example .env        # then paste your two API keys into .env
+# backend
+cp .env.example .env        # paste your two keys into .env
 npm install
 npm start                   # → http://localhost:3001
 
-# 2. Frontend (second terminal)
+# frontend (second terminal)
 cd frontend
 npm install
 npm run dev                 # → http://localhost:5173
 ```
 
-### Or with Docker (one command, runs continuously)
+### Or with Docker
 
 ```bash
 cp .env.example .env        # paste your keys
 docker compose up -d --build
-# → http://localhost:3001  (UI + API on one port)
+# → http://localhost:3001   (UI + API on one port)
 ```
 
-The container restarts automatically after crashes or reboots (`restart: unless-stopped`), and sessions persist in `./data`.
+The container restarts itself after crashes and reboots, and sessions persist in `./data`.
 
 ## Try it
 
-Two sample documents are included:
+Two sample manuals are included:
 
-- `sample.pdf` — a standing-desk user manual. Ask: *"How long is the warranty on the frame?"*, *"What does error code E02 mean?"*, *"Explain the return policy in full detail."*
-- `sample2.pdf` — an espresso-machine guide. Add it to the same chat via **+ Add PDF**, then ask *"How often should I descale?"* and watch the citation name the right file.
+- `sample.pdf` — a standing desk manual. Ask *"What does error code E02 mean?"* or *"Explain the return policy in full detail."*
+- `sample2.pdf` — an espresso machine guide. Add it with **+ add pdf**, ask *"How often should I descale?"*, and check that the citation names the right file.
 
-Then test the honesty: ask *"Who is the CEO?"* — it isn't in either document, and the app will tell you exactly that.
+Then try to break it: ask *"Who is the CEO?"* It isn't in either document, and the app should say exactly that.
 
-## Deployment
+## Deploying
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for the full runbook (Render blueprint, Render + Vercel split, or any Docker host).
+See [DEPLOYMENT.md](DEPLOYMENT.md) — one-service Render blueprint, Render + Vercel split, or any Docker host.
 
 ## Project layout
 
 ```
-config.js            tunable constants (chunk size, top-K, temperature…)
+config.js            all the tunable numbers (chunk size, top-K, temperature, limits)
 lib/loader.js        stage 1 — PDF → text
 lib/chunker.js       stage 2 — sentence-aware overlapping chunks
 lib/embedder.js      stage 3 — Cohere embeddings (document/query asymmetry)
 lib/vectorStore.js   stages 4+5 — HNSW index + metadata, save/load
-lib/rag.js           stage 6 — grounded generation, streaming, refusal
+lib/rag.js           stage 6 — grounded generation, rewriting, suggestions
+lib/projection.js    1024-d → 3D for the globe
 lib/sessions.js      session cache + disk persistence + lazy reload
-server.js            Express API: upload, SSE chat, health, static UI
-ingest.js            CLI: run the whole pipeline from the terminal
-frontend/            React chat UI with streaming + citation panels
+server.js            Express: upload, SSE chat, health, rate limits, static UI
+ingest.js            CLI: run the whole pipeline from a terminal
+frontend/            React chat UI + the three.js globe
 ```
