@@ -1,0 +1,25 @@
+{
+  "name": "askmydocs",
+  "version": "1.0.0",
+  "description": "RAG (Retrieval-Augmented Generation) document Q&A — upload a PDF, ask questions, get grounded answers with citations.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "ingest": "node ingest.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "cohere-ai": "^7.14.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "groq-sdk": "^0.19.0",
+    "hnswlib-node": "^3.0.0",
+    "multer": "^2.0.0",
+    "pdf-parse": "^1.1.1"
+  }
+}

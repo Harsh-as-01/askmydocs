@@ -1,0 +1,22 @@
+# Render Blueprint — deploys AskMyDocs as ONE web service that hosts both
+# the API and the built frontend (simplest setup: a single public URL).
+#
+# Usage: push this repo to GitHub → Render dashboard → New → Blueprint →
+# pick the repo → set the two secret env vars when prompted.
+#
+# Alternative (backend-only on Render + frontend on Vercel) is documented
+# in DEPLOYMENT.md.
+services:
+  - type: web
+    name: askmydocs
+    runtime: node
+    plan: free
+    # Build the React app too, so server.js finds frontend/dist and serves it.
+    buildCommand: npm install && npm --prefix frontend install --include=dev && npm --prefix frontend run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false # "sync: false" = enter the secret in the dashboard
+      - key: COHERE_API_KEY
+        sync: false

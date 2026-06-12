@@ -1,0 +1,18 @@
+# Secrets must never enter the image — keys are injected at runtime.
+.env
+**/.env
+
+# Build artifacts and deps are produced inside the build stages.
+node_modules
+frontend/node_modules
+frontend/dist
+data
+
+# Dev-only files
+.claude
+.git
+*.pdf
+make_sample_pdf.py
+make_sample2_pdf.py
+README.md
+DEPLOYMENT.md
