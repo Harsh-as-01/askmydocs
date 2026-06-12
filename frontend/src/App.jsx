@@ -1,65 +1,75 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { checkHealth, streamChat, uploadPdf } from './api.js';
 import ChatWindow from './components/ChatWindow.jsx';
 import UploadZone from './components/UploadZone.jsx';
 
+// three.js is heavy — load the globe as a separate chunk after first paint
+// so the chat UI itself stays instant.
+const Globe = lazy(() => import('./components/Globe.jsx'));
+
 /**
- * AskMyDocs — upload PDFs, then chat with them.
- *
- * State machine: no session → UploadZone; session → ChatWindow.
- * A session can hold multiple documents ("Add PDF"), and each assistant
- * message carries its own retrieved sources, so every answer's citations
- * panel reflects exactly the chunks the model saw — including which file
- * each chunk came from.
+ * AskMyDocs — Carbon design: pure black, hairline borders, mono metadata,
+ * and a 3D globe that IS the vector index. Every chunk of the uploaded
+ * documents is a point (projected from its embedding); retrieval makes the
+ * chosen chunks pulse red.
  */
 export default function App() {
   const [session, setSession] = useState(null); // { sessionId, files, totalChunks }
   const [messages, setMessages] = useState([]);
-  const [suggestions, setSuggestions] = useState([]); // starter questions from the backend
+  const [suggestions, setSuggestions] = useState([]);
+  const [points, setPoints] = useState([]); // 3D positions of every chunk
+  const [highlight, setHighlight] = useState(null); // { ids, ts } — retrieved chunks
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [busy, setBusy] = useState(false);
-
-  // Backend liveness: 'connecting' → 'waking' (cold start) → 'ready' | 'down'.
-  // Free hosting tiers sleep idle servers; pinging /api/health on load both
-  // warms the server up and lets us show an honest status instead of
-  // mysterious failures.
   const [serverStatus, setServerStatus] = useState('connecting');
   const addInputRef = useRef(null);
 
+  // Static fallback when WebGL is unavailable or the user prefers
+  // reduced motion — the app must degrade gracefully, not break.
+  const canRender3D = useMemo(() => {
+    try {
+      const c = document.createElement('canvas');
+      const webgl = c.getContext('webgl2') || c.getContext('webgl');
+      const still = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+      return Boolean(webgl) && !still;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // Warm-up ping with retry — free hosting sleeps idle servers.
   useEffect(() => {
     let cancelled = false;
     const startedAt = Date.now();
-
     const ping = async () => {
       try {
         await checkHealth();
         if (!cancelled) setServerStatus('ready');
       } catch {
         if (cancelled) return;
-        if (Date.now() - startedAt > 90_000) {
-          setServerStatus('down'); // give up after 90s
-        } else {
+        if (Date.now() - startedAt > 90_000) setServerStatus('down');
+        else {
           setServerStatus('waking');
-          setTimeout(ping, 3000); // keep retrying while it boots
+          setTimeout(ping, 3000);
         }
       }
     };
     ping();
-
     return () => {
       cancelled = true;
     };
   }, []);
 
   const handleUpload = async (file) => {
+    if (uploading) return; // guard against double-fired change events
     setUploading(true);
     setUploadError('');
     try {
-      // Pass the current sessionId (if any) so extra PDFs join the session.
       const info = await uploadPdf(file, session?.sessionId);
       setSession({ sessionId: info.sessionId, files: info.files, totalChunks: info.totalChunks });
       setSuggestions(info.suggestions ?? []);
+      setPoints(info.points ?? []);
       if (!session) setMessages([]);
     } catch (e) {
       setUploadError(e.message);
@@ -70,8 +80,6 @@ export default function App() {
 
   const handleSend = async (question) => {
     setBusy(true);
-    // Snapshot recent turns BEFORE appending the new question — the backend
-    // uses them to rewrite follow-ups ("what voids it?") for retrieval.
     const history = messages
       .filter((m) => !m.error && m.content)
       .slice(-6)
@@ -82,7 +90,6 @@ export default function App() {
       { role: 'assistant', content: '', sources: [], streaming: true },
     ]);
 
-    // Helper: mutate the assistant message currently being streamed.
     const patchLast = (patch) =>
       setMessages((prev) => {
         const next = [...prev];
@@ -95,7 +102,12 @@ export default function App() {
         sessionId: session.sessionId,
         question,
         history,
-        onSources: (sources) => patchLast(() => ({ sources })),
+        onSources: (sources) => {
+          patchLast(() => ({ sources }));
+          // Light up the retrieved chunks on the globe.
+          const ids = sources.map((s) => s.id).filter(Number.isInteger);
+          if (ids.length) setHighlight({ ids, ts: Date.now() });
+        },
         onToken: (token) => patchLast((m) => ({ content: m.content + token })),
       });
       patchLast(() => ({ streaming: false }));
@@ -103,52 +115,77 @@ export default function App() {
       const friendly = /session not found/i.test(e.message)
         ? 'This session has expired on the server. Click "New chat" and upload your document again.'
         : e.message;
-      patchLast((m) => ({
-        streaming: false,
-        error: true,
-        content: m.content || friendly,
-      }));
+      patchLast((m) => ({ streaming: false, error: true, content: m.content || friendly }));
     } finally {
       setBusy(false);
     }
   };
 
+  const resetSession = () => {
+    setSession(null);
+    setMessages([]);
+    setSuggestions([]);
+    setPoints([]);
+    setHighlight(null);
+    setUploadError('');
+  };
+
   return (
-    <div className="flex h-screen flex-col bg-slate-100">
+    <div className="relative flex h-screen flex-col overflow-hidden bg-[#050505] text-neutral-100">
+      {/* 3D layer: full-bleed behind everything; bright on the landing
+          screen, dimmed during chat so text stays readable. */}
+      <div
+        className={`pointer-events-none fixed inset-0 transition-opacity duration-1000 ${
+          session ? 'opacity-50' : 'opacity-90'
+        }`}
+        aria-hidden="true"
+      >
+        {canRender3D ? (
+          <Suspense fallback={null}>
+            <Globe points={points} highlight={highlight} />
+          </Suspense>
+        ) : (
+          <svg viewBox="0 0 200 200" className="mx-auto mt-24 h-72 w-72 opacity-40">
+            <circle cx="100" cy="100" r="70" fill="none" stroke="#fff" strokeOpacity="0.3" />
+            <ellipse cx="100" cy="100" rx="70" ry="26" fill="none" stroke="#fff" strokeOpacity="0.2" />
+            <ellipse cx="100" cy="100" rx="26" ry="70" fill="none" stroke="#fff" strokeOpacity="0.15" />
+          </svg>
+        )}
+      </div>
+
       {serverStatus === 'waking' && (
-        <div className="bg-amber-100 px-4 py-2 text-center text-xs font-medium text-amber-800">
-          ⏳ Waking up the server — free hosting sleeps when idle. This can take up to a minute…
+        <div className="relative z-10 border-b border-amber-900/40 bg-[#15100a] px-4 py-2 text-center font-mono text-xs text-amber-200/90">
+          waking up the server — free hosting sleeps when idle, give it up to a minute
         </div>
       )}
       {serverStatus === 'down' && (
-        <div className="bg-red-100 px-4 py-2 text-center text-xs font-medium text-red-700">
-          The server is not responding. Please check that the backend is running, then refresh.
+        <div className="relative z-10 border-b border-red-900/50 bg-[#160b0b] px-4 py-2 text-center font-mono text-xs text-red-300">
+          the server is not responding — check that the backend is running, then refresh
         </div>
       )}
 
-      <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-5 py-3">
-        <span className="text-xl">📚</span>
+      <header className="relative z-10 flex items-center gap-3 border-b border-neutral-900 bg-[#050505]/80 px-5 py-3 backdrop-blur-sm">
+        <span className="inline-block h-2.5 w-2.5 bg-white" aria-hidden="true" />
         <div className="min-w-0">
-          <h1 className="text-base font-semibold text-slate-800">AskMyDocs</h1>
-          <p className="text-xs text-slate-400">Grounded answers from your PDFs, with citations</p>
+          <h1 className="text-sm font-medium tracking-wide text-neutral-100">AskMyDocs</h1>
+          <p className="font-mono text-[11px] text-neutral-600">grounded answers · cited sources</p>
         </div>
 
         {session && (
           <div className="ml-auto flex min-w-0 items-center gap-2 text-xs">
-            <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
+            <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
               {session.files.map((f, i) => (
                 <span
                   key={i}
-                  className="max-w-44 truncate rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700"
+                  className="max-w-44 truncate border border-neutral-800 px-2.5 py-1 font-mono text-[11px] text-neutral-400"
                   title={f}
                 >
-                  📄 {f}
+                  {f}
                 </span>
               ))}
-              <span className="text-slate-400">{session.totalChunks} chunks</span>
+              <span className="font-mono text-[11px] text-neutral-600">{session.totalChunks} chunks</span>
             </div>
 
-            {/* Add another PDF to this session (multi-document chat). */}
             <input
               ref={addInputRef}
               type="file"
@@ -164,33 +201,30 @@ export default function App() {
               type="button"
               disabled={uploading}
               onClick={() => addInputRef.current?.click()}
-              className="shrink-0 rounded-lg border border-indigo-200 px-2.5 py-1 font-medium text-indigo-600 transition hover:bg-indigo-50 disabled:opacity-50"
+              className="shrink-0 border border-neutral-700 px-2.5 py-1 text-[11px] font-medium text-neutral-300 transition hover:border-neutral-400 hover:text-white disabled:opacity-50"
             >
-              {uploading ? 'Adding…' : '+ Add PDF'}
+              {uploading ? 'adding…' : '+ add pdf'}
             </button>
             <button
               type="button"
-              onClick={() => {
-                setSession(null);
-                setMessages([]);
-                setUploadError('');
-              }}
-              className="shrink-0 text-indigo-500 hover:text-indigo-700"
+              onClick={resetSession}
+              className="shrink-0 text-[11px] text-neutral-500 transition hover:text-white"
             >
-              New chat
+              new chat
             </button>
           </div>
         )}
       </header>
 
-      {/* Upload errors while inside a chat (e.g. adding a scanned PDF). */}
       {session && uploadError && (
-        <div className="bg-red-50 px-4 py-2 text-center text-xs text-red-600">{uploadError}</div>
+        <div className="relative z-10 border-b border-red-900/50 bg-[#160b0b] px-4 py-2 text-center font-mono text-xs text-red-300">
+          {uploadError}
+        </div>
       )}
 
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-hidden">
+      <main className="relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-hidden">
         {!session ? (
-          <div className="flex flex-1 items-center justify-center p-6">
+          <div className="flex flex-1 items-end justify-center p-6 pb-16">
             <UploadZone
               onUpload={handleUpload}
               uploading={uploading}

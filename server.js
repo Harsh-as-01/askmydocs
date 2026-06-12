@@ -38,6 +38,7 @@ import {
   REFUSAL_TEXT,
 } from './lib/rag.js';
 import { getSession, setSession, persistSession } from './lib/sessions.js';
+import { projectTo3D } from './lib/projection.js';
 
 const app = express();
 // Render/most PaaS terminate TLS at a proxy; trust exactly one hop so the
@@ -138,6 +139,12 @@ app.post('/api/upload', uploadLimiter, (req, res) => {
       // CHUNK → EMBED (input_type: search_document) → STORE
       const chunks = chunkText(text, filename);
       const vectors = await embedChunks(chunks.map((c) => c.text));
+      // Project each embedding to a 3D point for the frontend's globe —
+      // the chunk's position in (compressed) vector space, persisted with
+      // the rest of its metadata.
+      chunks.forEach((c, i) => {
+        c.pos = projectTo3D(vectors[i]);
+      });
       session.store.add(vectors, chunks);
       session.files.push(filename);
 
@@ -151,6 +158,12 @@ app.post('/api/upload', uploadLimiter, (req, res) => {
         chunks.slice(0, 3).map((c) => c.text).join('\n\n')
       );
 
+      // Every chunk in the session as a 3D point (id = its index label),
+      // so the globe always shows the whole index across all documents.
+      const points = session.store.metadata
+        .map((m, i) => ({ id: i, pos: m.pos, source: m.source }))
+        .filter((p) => Array.isArray(p.pos));
+
       res.json({
         sessionId,
         filename,
@@ -158,6 +171,7 @@ app.post('/api/upload', uploadLimiter, (req, res) => {
         files: session.files,
         totalChunks: session.store.size,
         suggestions,
+        points,
       });
     } catch (e) {
       console.error('Upload failed:', e);
