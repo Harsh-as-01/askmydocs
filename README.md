@@ -2,7 +2,7 @@
 
 Upload a PDF, ask it questions, get answers with citations that point at the exact passage. If the answer isn't in the document, it tells you that instead of making something up.
 
-**Live demo:** https://askmydocs-xx7m.onrender.com — free hosting, so the first visit can take up to a minute while the server wakes up. The app tells you when that's happening.
+**Live demo:** https://askmydocs-azwg.onrender.com — free hosting, so the first visit can take up to a minute while the server wakes up. The app tells you when that's happening.
 **Stack:** Node + Express · React (Vite) + Tailwind · Groq (Llama 3.3 70B) · Cohere embeddings · HNSW · three.js
 
 ![AskMyDocs landing screen — the sphere is the vector index, every dot is a chunk of your document](docs/landing.png)

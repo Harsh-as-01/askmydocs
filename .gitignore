@@ -12,4 +12,4 @@ data/
 Thumbs.db
 
 # Personal tool settings
-.claude/settings.local.json
+.claude/
