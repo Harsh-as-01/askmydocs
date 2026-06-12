@@ -62,15 +62,17 @@ export async function uploadPdf(file, sessionId) {
  * @param {object} opts
  * @param {string} opts.sessionId
  * @param {string} opts.question
+ * @param {Array<{role, content}>} [opts.history] - recent turns, used by the
+ *        backend to rewrite follow-up questions before retrieval
  * @param {(sources: Array) => void} opts.onSources
  * @param {(token: string) => void} opts.onToken
  * @returns {Promise<void>} resolves on `done`, rejects on `error`
  */
-export async function streamChat({ sessionId, question, onSources, onToken }) {
+export async function streamChat({ sessionId, question, history = [], onSources, onToken }) {
   const res = await fetch(`${API_URL}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId, question }),
+    body: JSON.stringify({ sessionId, question, history }),
   });
 
   if (!res.ok) {

@@ -33,4 +33,17 @@ export const CONFIG = {
   // Low temperature = deterministic, factual output. We want the model to
   // repeat what the document says, not get creative.
   GENERATION_TEMPERATURE: 0.1,
+
+  // How many past chat messages are considered when rewriting a follow-up
+  // question ("what voids it?") into a standalone one for retrieval.
+  MAX_HISTORY_MESSAGES: 6,
+
+  // Guardrails for the public demo: caps per session and per IP address.
+  // These protect the (rate-limited, quota'd) Groq and Cohere API keys
+  // behind the server from being drained by a single visitor or bot.
+  MAX_DOCS_PER_SESSION: 5,
+  RATE_LIMIT: {
+    UPLOADS_PER_HOUR: 10,
+    CHATS_PER_15_MIN: 30,
+  },
 };

@@ -5,7 +5,7 @@ import MessageBubble from './MessageBubble.jsx';
  * Chat window: message list with auto-scroll + question input.
  * Send is a button onClick / Enter keydown — no <form> submission.
  */
-export default function ChatWindow({ messages, onSend, busy, docLabel }) {
+export default function ChatWindow({ messages, onSend, busy, docLabel, suggestions = [] }) {
   const [draft, setDraft] = useState('');
   const bottomRef = useRef(null);
 
@@ -25,10 +25,28 @@ export default function ChatWindow({ messages, onSend, busy, docLabel }) {
     <div className="flex h-full flex-col">
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
         {messages.length === 0 && (
-          <p className="mt-10 text-center text-sm text-slate-400">
-            Ask anything about <span className="font-medium text-slate-500">{docLabel}</span> — answers
-            cite the exact passages they came from.
-          </p>
+          <div className="mt-10 space-y-4 text-center">
+            <p className="text-sm text-slate-400">
+              Ask anything about <span className="font-medium text-slate-500">{docLabel}</span> — answers
+              cite the exact passages they came from.
+            </p>
+            {/* Starter questions generated from the document itself. */}
+            {suggestions.length > 0 && (
+              <div className="flex flex-wrap justify-center gap-2">
+                {suggestions.map((q, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onSend(q)}
+                    className="rounded-full border border-indigo-200 bg-indigo-50 px-3.5 py-1.5 text-xs font-medium text-indigo-700 transition hover:bg-indigo-100 disabled:opacity-50"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
         {messages.map((m, i) => (
           <MessageBubble key={i} message={m} />

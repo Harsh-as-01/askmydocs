@@ -19,7 +19,7 @@ AskMyDocs is a Retrieval-Augmented Generation (RAG) app: upload one or more PDFs
 - **cited** — statements carry [1]-style references you can expand to see the exact source passage, its file, and its similarity score,
 - **honest** — if the documents don't contain the answer, it says exactly that instead of hallucinating.
 
-Sessions support multiple documents with per-file citation attribution, stream answers token-by-token, and survive server restarts via disk-persisted vector indexes.
+Sessions support multiple documents with per-file citation attribution, stream answers token-by-token, and survive server restarts via disk-persisted vector indexes. Follow-up questions work naturally ("what voids it?") thanks to LLM query rewriting, each upload generates clickable starter questions, and the public endpoints are rate-limited per IP so one visitor can't drain the API quotas behind the demo.
 
 ## How it works — the RAG pipeline
 
@@ -55,6 +55,10 @@ The retrieved chunks are streamed to the browser *before* the answer (so citatio
 **HNSW in-process instead of a vector database.** For sessions of one-to-a-few PDFs, a dedicated vector DB is infrastructure for its own sake. `hnswlib-node` provides the same approximate-nearest-neighbor algorithm the big DBs use, in-process, with zero external services — and the index serializes to disk so sessions survive restarts.
 
 **Honest refusal, enforced by prompt.** The system prompt pins an exact refusal sentence ("I couldn't find that in the document.") and forbids outside knowledge. Tested explicitly: off-topic questions get the refusal, not plausible fiction.
+
+**Query rewriting for follow-ups.** Retrieval embeds each question in isolation, so "what voids it?" would retrieve nothing useful — "it" carries no meaning without the previous turn. Before retrieving, a small LLM call rewrites follow-ups into standalone questions using recent chat history. One cheap completion fixes the most common way conversational RAG breaks.
+
+**Rate limiting as a launch requirement, not an afterthought.** The demo runs on the owner's API keys, so `/api/upload` and `/api/chat` are limited per IP (plus a per-session document cap). A public LLM app without rate limits is an open invitation to drain your quota.
 
 ## Run it locally
 

@@ -15,6 +15,7 @@ import UploadZone from './components/UploadZone.jsx';
 export default function App() {
   const [session, setSession] = useState(null); // { sessionId, files, totalChunks }
   const [messages, setMessages] = useState([]);
+  const [suggestions, setSuggestions] = useState([]); // starter questions from the backend
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -58,6 +59,7 @@ export default function App() {
       // Pass the current sessionId (if any) so extra PDFs join the session.
       const info = await uploadPdf(file, session?.sessionId);
       setSession({ sessionId: info.sessionId, files: info.files, totalChunks: info.totalChunks });
+      setSuggestions(info.suggestions ?? []);
       if (!session) setMessages([]);
     } catch (e) {
       setUploadError(e.message);
@@ -68,6 +70,12 @@ export default function App() {
 
   const handleSend = async (question) => {
     setBusy(true);
+    // Snapshot recent turns BEFORE appending the new question — the backend
+    // uses them to rewrite follow-ups ("what voids it?") for retrieval.
+    const history = messages
+      .filter((m) => !m.error && m.content)
+      .slice(-6)
+      .map(({ role, content }) => ({ role, content }));
     setMessages((prev) => [
       ...prev,
       { role: 'user', content: question },
@@ -86,6 +94,7 @@ export default function App() {
       await streamChat({
         sessionId: session.sessionId,
         question,
+        history,
         onSources: (sources) => patchLast(() => ({ sources })),
         onToken: (token) => patchLast((m) => ({ content: m.content + token })),
       });
@@ -195,6 +204,7 @@ export default function App() {
             onSend={handleSend}
             busy={busy}
             docLabel={session.files.join(', ')}
+            suggestions={suggestions}
           />
         )}
       </main>

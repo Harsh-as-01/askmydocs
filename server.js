@@ -24,16 +24,45 @@ import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import express from 'express';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
+import { CONFIG } from './config.js';
 import { loadPdf } from './lib/loader.js';
 import { chunkText } from './lib/chunker.js';
 import { embedChunks } from './lib/embedder.js';
 import { VectorStore } from './lib/vectorStore.js';
-import { retrieveSources, streamAnswerTokens, REFUSAL_TEXT } from './lib/rag.js';
+import {
+  retrieveSources,
+  streamAnswerTokens,
+  rewriteQuestion,
+  suggestQuestions,
+  REFUSAL_TEXT,
+} from './lib/rag.js';
 import { getSession, setSession, persistSession } from './lib/sessions.js';
 
 const app = express();
+// Render/most PaaS terminate TLS at a proxy; trust exactly one hop so the
+// rate limiter sees the real client IP from X-Forwarded-For, not the proxy's.
+app.set('trust proxy', 1);
 app.use(cors()); // frontend runs on a different origin (Vite dev / Vercel)
 app.use(express.json());
+
+// Per-IP rate limits. This is a public demo running on the owner's API
+// keys — without limits, one bot could drain the Groq/Cohere quotas and
+// take the demo down for everyone.
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: CONFIG.RATE_LIMIT.UPLOADS_PER_HOUR,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Upload limit reached for this hour. Please try again later.' },
+});
+const chatLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: CONFIG.RATE_LIMIT.CHATS_PER_15_MIN,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many questions in a short time. Please wait a few minutes.' },
+});
 
 // Multer in memory storage: the PDF buffer goes straight to pdf-parse and is
 // never written to disk. 15MB cap and PDF-only mimetype filter.
@@ -60,9 +89,9 @@ app.get('/api/health', (req, res) => {
  * PDF to that session. Each chunk's metadata records its source filename,
  * so citations always name the right document.
  *
- * Returns { sessionId, filename, chunkCount, files, totalChunks }.
+ * Returns { sessionId, filename, chunkCount, files, totalChunks, suggestions }.
  */
-app.post('/api/upload', (req, res) => {
+app.post('/api/upload', uploadLimiter, (req, res) => {
   upload.single('file')(req, res, async (err) => {
     try {
       if (err) {
@@ -96,6 +125,11 @@ app.post('/api/upload', (req, res) => {
       if (requestedId && !session) {
         return res.status(404).json({ error: 'Session not found. Start a new chat and upload again.' });
       }
+      if (session && session.files.length >= CONFIG.MAX_DOCS_PER_SESSION) {
+        return res.status(400).json({
+          error: `A session can hold at most ${CONFIG.MAX_DOCS_PER_SESSION} documents. Start a new chat for more.`,
+        });
+      }
       if (!session) {
         sessionId = crypto.randomUUID();
         session = { store: new VectorStore(), files: [] };
@@ -111,12 +145,19 @@ app.post('/api/upload', (req, res) => {
       // Persist so the session survives a server restart (Phase 3).
       await persistSession(sessionId, session);
 
+      // Best-effort: 3 clickable starter questions from the document's
+      // opening chunks, so new users aren't staring at an empty input.
+      const suggestions = await suggestQuestions(
+        chunks.slice(0, 3).map((c) => c.text).join('\n\n')
+      );
+
       res.json({
         sessionId,
         filename,
         chunkCount: chunks.length,
         files: session.files,
         totalChunks: session.store.size,
+        suggestions,
       });
     } catch (e) {
       console.error('Upload failed:', e);
@@ -137,12 +178,19 @@ function sseSend(res, event, data) {
  * render the citations panel immediately, then the answer streams in
  * token-by-token on top of it.
  */
-app.post('/api/chat', async (req, res) => {
-  const { sessionId, question } = req.body ?? {};
+app.post('/api/chat', chatLimiter, async (req, res) => {
+  const { sessionId, question, history } = req.body ?? {};
 
   if (!sessionId || !question?.trim()) {
     return res.status(400).json({ error: 'Both sessionId and question are required.' });
   }
+
+  // Sanitize client-supplied history: cap turns and length, allow only the
+  // two chat roles. It's only used for query rewriting, never stored.
+  const cleanHistory = (Array.isArray(history) ? history : [])
+    .filter((m) => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string')
+    .slice(-CONFIG.MAX_HISTORY_MESSAGES)
+    .map((m) => ({ role: m.role, content: m.content.slice(0, 2000) }));
 
   // Memory first, then lazy-load from ./data/<sessionId> — this is what
   // lets an old session keep answering after the server restarts.
@@ -164,15 +212,19 @@ app.post('/api/chat', async (req, res) => {
   });
 
   try {
+    // Resolve follow-ups ("what voids it?") into standalone questions
+    // before retrieval — see rewriteQuestion() for why this matters.
+    const standalone = await rewriteQuestion(question, cleanHistory);
+
     // RETRIEVE, then send the chunks + similarity scores up front.
-    const sources = await retrieveSources(question, session.store);
+    const sources = await retrieveSources(standalone, session.store);
     sseSend(res, 'sources', sources);
 
     if (sources.length === 0) {
       sseSend(res, 'token', { token: REFUSAL_TEXT });
     } else {
       // GENERATE: forward each token as its own SSE event.
-      for await (const token of streamAnswerTokens(question, sources)) {
+      for await (const token of streamAnswerTokens(standalone, sources)) {
         if (clientGone) break;
         sseSend(res, 'token', { token });
       }
