@@ -1,0 +1,148 @@
+/**
+ * Theme definitions — the single source of truth for every color in the app.
+ *
+ * Each theme provides:
+ *   - vars:  CSS custom properties applied to <html> (App.jsx). All UI colors
+ *            are written as `var(--…)` in Tailwind arbitrary values, so the UI
+ *            re-themes the instant these change.
+ *   - globe: colors + line opacities for the three.js scene (Globe.jsx).
+ *            WebGL can't read CSS variables, so the globe takes plain values.
+ *   - dot:   the swatch color shown for this theme in the header switcher.
+ *
+ * Carbon is the original pure-black design and the default.
+ */
+export const THEMES = {
+  carbon: {
+    label: 'Carbon',
+    dot: '#a3a3a3',
+    colorScheme: 'dark',
+    vars: {
+      '--bg': '#050505',
+      '--fg': '#f5f5f5',
+      '--fg-strong': '#ffffff',
+      '--muted': '#a3a3a3',
+      '--faint': '#6b6b6b',
+      '--line': '#262626',
+      '--panel': '#0a0a0a',
+      '--glass': 'rgb(5 5 5 / 0.8)',
+      '--glass-soft': 'rgb(5 5 5 / 0.5)',
+      '--bubble': 'rgb(10 10 10 / 0.9)',
+      '--accent': '#ffffff',
+      '--on-accent': '#000000',
+      '--accent-hover': '#d4d4d4',
+      '--code-bg': '#171717',
+      '--sel-bg': '#ffffff',
+      '--sel-fg': '#000000',
+      '--scroll': '#262626',
+      '--scroll-hover': '#404040',
+      '--error-bg': 'rgb(22 11 11 / 0.9)',
+      '--error-line': 'rgb(127 29 29 / 0.55)',
+      '--error-fg': '#fca5a5',
+      '--warn-bg': '#15100a',
+      '--warn-line': 'rgb(120 53 15 / 0.45)',
+      '--warn-fg': '#fcd34d',
+    },
+    globe: { point: '#9a9a9a', line: '#ffffff', highlight: '#e24b4a', wire: 0.035, ring: 1 },
+  },
+
+  nebula: {
+    label: 'Nebula',
+    dot: '#7cc4ff',
+    colorScheme: 'dark',
+    vars: {
+      '--bg': '#070a14',
+      '--fg': '#e6ecff',
+      '--fg-strong': '#ffffff',
+      '--muted': '#93a1c4',
+      '--faint': '#566189',
+      '--line': '#1c2742',
+      '--panel': '#0c1322',
+      '--glass': 'rgb(7 10 20 / 0.8)',
+      '--glass-soft': 'rgb(7 10 20 / 0.5)',
+      '--bubble': 'rgb(12 19 34 / 0.9)',
+      '--accent': '#7cc4ff',
+      '--on-accent': '#04060d',
+      '--accent-hover': '#a8d8ff',
+      '--code-bg': '#111a2e',
+      '--sel-bg': '#7cc4ff',
+      '--sel-fg': '#04060d',
+      '--scroll': '#1c2742',
+      '--scroll-hover': '#33436b',
+      '--error-bg': 'rgb(34 12 22 / 0.9)',
+      '--error-line': 'rgb(136 32 64 / 0.55)',
+      '--error-fg': '#fda4c0',
+      '--warn-bg': '#1a140a',
+      '--warn-line': 'rgb(120 70 15 / 0.45)',
+      '--warn-fg': '#fcd34d',
+    },
+    globe: { point: '#7fb0ff', line: '#9ec5ff', highlight: '#f472b6', wire: 0.05, ring: 1.2 },
+  },
+
+  aurora: {
+    label: 'Aurora',
+    dot: '#5eead4',
+    colorScheme: 'dark',
+    vars: {
+      '--bg': '#04100d',
+      '--fg': '#dbfaef',
+      '--fg-strong': '#ffffff',
+      '--muted': '#82b5a4',
+      '--faint': '#4a6f62',
+      '--line': '#123028',
+      '--panel': '#08201a',
+      '--glass': 'rgb(4 16 13 / 0.8)',
+      '--glass-soft': 'rgb(4 16 13 / 0.5)',
+      '--bubble': 'rgb(8 32 26 / 0.9)',
+      '--accent': '#5eead4',
+      '--on-accent': '#04120d',
+      '--accent-hover': '#99f6e4',
+      '--code-bg': '#0c241d',
+      '--sel-bg': '#5eead4',
+      '--sel-fg': '#04120d',
+      '--scroll': '#123028',
+      '--scroll-hover': '#22463a',
+      '--error-bg': 'rgb(26 13 11 / 0.9)',
+      '--error-line': 'rgb(127 40 29 / 0.55)',
+      '--error-fg': '#fca5a5',
+      '--warn-bg': '#16140a',
+      '--warn-line': 'rgb(110 80 15 / 0.45)',
+      '--warn-fg': '#fcd34d',
+    },
+    globe: { point: '#5eead4', line: '#a7f3d0', highlight: '#fbbf24', wire: 0.05, ring: 1.2 },
+  },
+
+  paper: {
+    label: 'Paper',
+    dot: '#f5f5f4',
+    colorScheme: 'light',
+    vars: {
+      '--bg': '#f4f4f3',
+      '--fg': '#1c1917',
+      '--fg-strong': '#000000',
+      '--muted': '#57534e',
+      '--faint': '#a8a29e',
+      '--line': '#d6d3d1',
+      '--panel': '#ffffff',
+      '--glass': 'rgb(244 244 243 / 0.8)',
+      '--glass-soft': 'rgb(255 255 255 / 0.6)',
+      '--bubble': 'rgb(255 255 255 / 0.92)',
+      '--accent': '#1c1917',
+      '--on-accent': '#ffffff',
+      '--accent-hover': '#44403c',
+      '--code-bg': '#e7e5e4',
+      '--sel-bg': '#1c1917',
+      '--sel-fg': '#ffffff',
+      '--scroll': '#d6d3d1',
+      '--scroll-hover': '#a8a29e',
+      '--error-bg': 'rgb(254 242 242 / 0.95)',
+      '--error-line': 'rgb(220 38 38 / 0.4)',
+      '--error-fg': '#b91c1c',
+      '--warn-bg': '#fef9ec',
+      '--warn-line': 'rgb(180 130 20 / 0.4)',
+      '--warn-fg': '#92660a',
+    },
+    globe: { point: '#44403c', line: '#1c1917', highlight: '#dc2626', wire: 0.08, ring: 2 },
+  },
+};
+
+export const DEFAULT_THEME = 'carbon';

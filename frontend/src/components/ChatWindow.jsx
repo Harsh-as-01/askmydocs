@@ -25,11 +25,11 @@ export default function ChatWindow({ messages, onSend, busy, docLabel, suggestio
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
         {messages.length === 0 && (
           <div className="mt-12 space-y-5 text-center">
-            <p className="text-sm text-neutral-400">
-              Ask anything about <span className="text-neutral-200">{docLabel}</span>.
+            <p className="text-sm text-[var(--muted)]">
+              Ask anything about <span className="text-[var(--fg)]">{docLabel}</span>.
             </p>
-            <p className="font-mono text-[11px] text-neutral-600">
-              the globe behind you is your document in vector space — retrieved chunks flash red
+            <p className="font-mono text-[11px] text-[var(--faint)]">
+              the globe behind you is your document in vector space — retrieved chunks flash
             </p>
             {suggestions.length > 0 && (
               <div className="flex flex-wrap justify-center gap-2">
@@ -39,7 +39,7 @@ export default function ChatWindow({ messages, onSend, busy, docLabel, suggestio
                     type="button"
                     disabled={busy}
                     onClick={() => onSend(q)}
-                    className="border border-neutral-800 bg-black/40 px-3.5 py-1.5 text-xs text-neutral-300 backdrop-blur-sm transition hover:border-neutral-400 hover:text-white disabled:opacity-50"
+                    className="border border-[var(--line)] bg-[var(--glass-soft)] px-3.5 py-1.5 text-xs text-[var(--muted)] backdrop-blur-sm transition hover:border-[var(--muted)] hover:text-[var(--fg-strong)] disabled:opacity-50"
                   >
                     {q}
                   </button>
@@ -54,7 +54,7 @@ export default function ChatWindow({ messages, onSend, busy, docLabel, suggestio
         <div ref={bottomRef} />
       </div>
 
-      <div className="border-t border-neutral-900 bg-[#050505]/80 p-3 backdrop-blur-sm">
+      <div className="border-t border-[var(--line)] bg-[var(--glass)] p-3 backdrop-blur-sm">
         <div className="flex items-end gap-2">
           <textarea
             rows={1}
@@ -67,13 +67,13 @@ export default function ChatWindow({ messages, onSend, busy, docLabel, suggestio
               }
             }}
             placeholder="Ask your document…"
-            className="max-h-32 flex-1 resize-none border border-neutral-800 bg-[#0a0a0a] px-3.5 py-2.5 text-base text-neutral-100 placeholder-neutral-600 outline-none transition focus:border-neutral-400 sm:text-sm"
+            className="max-h-32 flex-1 resize-none border border-[var(--line)] bg-[var(--panel)] px-3.5 py-2.5 text-base text-[var(--fg)] placeholder-[var(--faint)] outline-none transition focus:border-[var(--muted)] sm:text-sm"
           />
           <button
             type="button"
             onClick={send}
             disabled={busy || !draft.trim()}
-            className="bg-white px-4 py-2.5 text-sm font-medium text-black transition hover:bg-neutral-300 disabled:cursor-not-allowed disabled:opacity-30"
+            className="bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-[var(--on-accent)] transition hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-30"
           >
             {busy ? '…' : 'Send'}
           </button>

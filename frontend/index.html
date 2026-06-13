@@ -7,6 +7,21 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Apply the saved theme's background before paint so a light theme
+      // doesn't flash dark on load. App.jsx then applies the full var set.
+      (function () {
+        try {
+          var bg = { carbon: '#050505', nebula: '#070a14', aurora: '#04100d', paper: '#f4f4f3' };
+          var t = localStorage.getItem('theme');
+          if (!bg[t]) t = 'carbon';
+          var root = document.documentElement;
+          root.dataset.theme = t;
+          root.style.setProperty('--bg', bg[t]);
+          root.style.colorScheme = t === 'paper' ? 'light' : 'dark';
+        } catch (e) {}
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

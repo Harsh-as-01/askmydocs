@@ -23,14 +23,14 @@ import { useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-const BASE_COLOR = new THREE.Color('#9a9a9a');
-const HIGHLIGHT_COLOR = new THREE.Color('#e24b4a');
+// Falls back to the original Carbon palette if a theme isn't supplied.
+const DEFAULT_GLOBE = { point: '#9a9a9a', line: '#ffffff', highlight: '#e24b4a', wire: 0.035, ring: 1 };
 const POINT_RADIUS = 0.016;
 const FLY_IN_MS = 1400;
 const GLOW_MS = 6000;
 
 /** A thin great-circle ring, like a longitude/latitude line. */
-function Ring({ rotation, opacity }) {
+function Ring({ rotation, opacity, color }) {
   const geometry = useMemo(() => {
     const pts = [];
     for (let i = 0; i < 128; i++) {
@@ -41,15 +41,17 @@ function Ring({ rotation, opacity }) {
   }, []);
   return (
     <lineLoop geometry={geometry} rotation={rotation}>
-      <lineBasicMaterial color="#ffffff" transparent opacity={opacity} />
+      <lineBasicMaterial color={color} transparent opacity={opacity} />
     </lineLoop>
   );
 }
 
 /** Instanced point cloud with fly-in and highlight pulse animation. */
-function ChunkCloud({ points, highlight }) {
+function ChunkCloud({ points, highlight, theme }) {
   const meshRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
+  const baseColor = useMemo(() => new THREE.Color(theme.point), [theme.point]);
+  const highlightColor = useMemo(() => new THREE.Color(theme.highlight), [theme.highlight]);
 
   // Per-batch animation state: where each point starts (random far shell)
   // and where it belongs (its projected embedding position).
@@ -94,7 +96,7 @@ function ChunkCloud({ points, highlight }) {
       dummy.scale.setScalar(1 + hot * 2.2);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
-      mesh.setColorAt(i, hot > 0.01 ? BASE_COLOR.clone().lerp(HIGHLIGHT_COLOR, Math.min(hot * 1.6, 1)) : BASE_COLOR);
+      mesh.setColorAt(i, hot > 0.01 ? baseColor.clone().lerp(highlightColor, Math.min(hot * 1.6, 1)) : baseColor);
     }
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -109,7 +111,7 @@ function ChunkCloud({ points, highlight }) {
 }
 
 /** Scene root: slow drift rotation applied to everything. */
-function Scene({ points, highlight }) {
+function Scene({ points, highlight, theme }) {
   const group = useRef();
 
   useFrame((state, delta) => {
@@ -122,12 +124,12 @@ function Scene({ points, highlight }) {
     <group ref={group}>
       <mesh>
         <sphereGeometry args={[1, 28, 18]} />
-        <meshBasicMaterial wireframe color="#ffffff" transparent opacity={0.035} />
+        <meshBasicMaterial wireframe color={theme.line} transparent opacity={theme.wire} />
       </mesh>
-      <Ring rotation={[Math.PI / 2, 0, 0]} opacity={0.14} />
-      <Ring rotation={[Math.PI / 2.6, 0.4, 0]} opacity={0.08} />
-      <Ring rotation={[0.3, Math.PI / 2.2, 0.2]} opacity={0.08} />
-      {points.length > 0 && <ChunkCloud points={points} highlight={highlight} />}
+      <Ring rotation={[Math.PI / 2, 0, 0]} opacity={0.14 * theme.ring} color={theme.line} />
+      <Ring rotation={[Math.PI / 2.6, 0.4, 0]} opacity={0.08 * theme.ring} color={theme.line} />
+      <Ring rotation={[0.3, Math.PI / 2.2, 0.2]} opacity={0.08 * theme.ring} color={theme.line} />
+      {points.length > 0 && <ChunkCloud points={points} highlight={highlight} theme={theme} />}
     </group>
   );
 }
@@ -143,7 +145,7 @@ function useAmbientPoints() {
   }, []);
 }
 
-export default function Globe({ points, highlight }) {
+export default function Globe({ points, highlight, theme = DEFAULT_GLOBE }) {
   const ambient = useAmbientPoints();
   const shown = points.length > 0 ? points : ambient;
 
@@ -154,7 +156,7 @@ export default function Globe({ points, highlight }) {
       gl={{ antialias: true, alpha: true }}
       style={{ background: 'transparent' }}
     >
-      <Scene points={shown} highlight={highlight} />
+      <Scene points={shown} highlight={highlight} theme={theme} />
     </Canvas>
   );
 }

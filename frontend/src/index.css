@@ -1,16 +1,42 @@
 @import 'tailwindcss';
 
-html {
-  color-scheme: dark;
+/* Carbon defaults so the very first paint is correct before JS runs. App.jsx
+   overrides these custom properties on <html> for the active theme, and the
+   tiny inline script in index.html sets --bg even earlier to avoid a flash. */
+:root {
+  --bg: #050505;
+  --fg: #f5f5f5;
+  --fg-strong: #ffffff;
+  --muted: #a3a3a3;
+  --faint: #6b6b6b;
+  --line: #262626;
+  --panel: #0a0a0a;
+  --glass: rgb(5 5 5 / 0.8);
+  --glass-soft: rgb(5 5 5 / 0.5);
+  --bubble: rgb(10 10 10 / 0.9);
+  --accent: #ffffff;
+  --on-accent: #000000;
+  --accent-hover: #d4d4d4;
+  --code-bg: #171717;
+  --sel-bg: #ffffff;
+  --sel-fg: #000000;
+  --scroll: #262626;
+  --scroll-hover: #404040;
+  --error-bg: rgb(22 11 11 / 0.9);
+  --error-line: rgb(127 29 29 / 0.55);
+  --error-fg: #fca5a5;
+  --warn-bg: #15100a;
+  --warn-line: rgb(120 53 15 / 0.45);
+  --warn-fg: #fcd34d;
 }
 
 body {
-  background: #050505;
+  background: var(--bg);
 }
 
 ::selection {
-  background: #ffffff;
-  color: #000000;
+  background: var(--sel-bg);
+  color: var(--sel-fg);
 }
 
 ::-webkit-scrollbar {
@@ -20,8 +46,8 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #262626;
+  background: var(--scroll);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #404040;
+  background: var(--scroll-hover);
 }
