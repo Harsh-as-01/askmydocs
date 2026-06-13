@@ -38,10 +38,26 @@ export async function uploadPdf(file, sessionId) {
   formData.append('file', file);
   if (sessionId) formData.append('sessionId', sessionId);
 
-  const res = await fetch(`${API_URL}/api/upload`, {
-    method: 'POST',
-    body: formData,
-  });
+  let res;
+  try {
+    res = await fetch(`${API_URL}/api/upload`, {
+      method: 'POST',
+      body: formData,
+      // The whole parse → chunk → embed pipeline runs inside this single
+      // request, and a cold-started free-tier server adds wake-up time, so
+      // allow a long window. But cap it: without a timeout a stalled request
+      // leaves the UI spinning forever with no error (which is exactly what
+      // a large PDF used to do).
+      signal: AbortSignal.timeout(180_000),
+    });
+  } catch (e) {
+    if (e.name === 'TimeoutError' || e.name === 'AbortError') {
+      throw new Error(
+        'Upload timed out — the PDF may be too large, or the server is waking up. Try again, or use a smaller document.'
+      );
+    }
+    throw new Error('Could not reach the server. Check your connection and try again.');
+  }
 
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
